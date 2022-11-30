@@ -51,8 +51,17 @@ importPackage(Packages.com.sk89q.worldedit.blocks);
 
 const SEA_LEVEL = 63;
 const BEDROCK_LEVEL = 60;
+const MAX_TERRAIN_HEIGHT = 9;
+const WALL_HEIGHT = 4;
 
-const NUM_LAYERS = 4;
+// TODO: These need to depend on the actual ground height
+const FLOOR_1_ELEVATION = MAX_TERRAIN_HEIGHT + WALL_HEIGHT + 1;
+const FLOOR_2_ELEVATION = FLOOR_1_ELEVATION + WALL_HEIGHT + 1;
+const FLOOR_3_ELEVATION = FLOOR_2_ELEVATION + WALL_HEIGHT + 1;
+
+// TODO: Layer 4 is underground!
+const NUM_LAYERS = 3;
+
 const SECTOR_SIZE = 48;
 
 // Sector filenames start from h0x48y37
@@ -88,13 +97,22 @@ function processTile(sectorMinBlockPos, layer, tileX, tileY, tile) {
     // Ground
     ////////////////////////////////////////////////////////////////////////////
 
-    // Place bedrock as a base
+    // Get tile overlay settings
+    var overlaySettings = null;
+    if (tile.groundOverlay) {
+        overlaySettings = getOverlaySettings(tile.groundOverlay);
+    }
+
+    // Pick the block type based on the tile color
+    var blockType = getBlockTypeFromPalette(tile.groundTexture);
+
+    var elevation = 0;
+
+    // Determine desired elevation and place supporting blocks
     if (layer === 0) {
+        // Place bedrock as a base
         var bedrock = context.getBlock("bedrock");
         blocks.setBlock(blockPos, bedrock);
-
-        // Pick the block type based on the tile color
-        var blockType = getBlockTypeFromPalette(tile.groundTexture);
 
         // Pick the block type to be used by any supporting blocks
         var supportType = blockType == context.getBlock("dirt_path")
@@ -103,34 +121,17 @@ function processTile(sectorMinBlockPos, layer, tileX, tileY, tile) {
 
         // RSC elevation seems to range from: 0 (highest point) to 256 (lowest point),
         // which we map to the range: 9 (highest point) to 1 (lowest point).
-        var elevation = 5 + ((tile.groundElevation) / 32);
-
-        // Get tile overlay settings
-        var overlaySettings = null;
-        if (tile.groundOverlay) {
-            overlaySettings = getOverlaySettings(tile.groundOverlay);
-            if (overlaySettings.overrideElevation) {
-                elevation = overlaySettings.overrideElevation;
-            }
+        elevation = 5 + ((tile.groundElevation) / 32);
+        if (overlaySettings && overlaySettings.overrideElevation) {
+            elevation = overlaySettings.overrideElevation;
         }
 
-        // Place blocks up to the desired elevation
-        for (var i = 1; i <= elevation; i++) {
+        // Place supporting blocks up to the desired elevation
+        for (var i = 1; i < elevation; i++) {
             blockPos = blockPos.withY(BEDROCK_LEVEL + i);
             if (i < elevation) {
                 blocks.setBlock(blockPos, supportType);
-            } else {
-                blocks.setBlock(blockPos, blockType);
             }
-        }
-
-        // Place overlay block
-        if (overlaySettings) {
-            if (!overlaySettings.replaceGround) {
-                elevation += 1;
-            }
-            blockPos = blockPos.withY(BEDROCK_LEVEL + elevation);
-            blocks.setBlock(blockPos, overlaySettings.block);
         }
 
         // TMP: Clean chunk
@@ -138,7 +139,34 @@ function processTile(sectorMinBlockPos, layer, tileX, tileY, tile) {
             blockPos = blockPos.withY(BEDROCK_LEVEL + elevation + i);
             blocks.setBlock(blockPos, context.getBlock("air"));
         }
+    } else if (layer === 1) {
+        elevation = FLOOR_1_ELEVATION;
+    } else if (layer === 2) {
+        elevation = FLOOR_2_ELEVATION;
+    } else if (layer === 3) {
+        elevation = FLOOR_3_ELEVATION;
+    } else if (layer === 4) {
+        elevation = FLOOR_4_ELEVATION;
     }
+
+    // Place ground
+    if (layer === 0) {
+        blockPos = blockPos.withY(BEDROCK_LEVEL + elevation);
+        blocks.setBlock(blockPos, blockType);
+    }
+
+    // Place overlay block
+    if (overlaySettings) {
+        // Ignore void blocks on upper storeys
+        if (layer === 0 || !overlaySettings.isVoid) {
+            if (!overlaySettings.replaceGround) {
+                elevation += 1;
+            }
+            blockPos = blockPos.withY(BEDROCK_LEVEL + elevation);
+            blocks.setBlock(blockPos, overlaySettings.block);
+        }
+    }
+
 
     ////////////////////////////////////////////////////////////////////////////
     // Walls
@@ -231,7 +259,8 @@ function getBlockTypeFromPalette(paletteIndex) {
 function getOverlaySettings(groundOverlay) {
     var overlaySettings = {
         block: context.getBlock("cyan_wool"),
-        replaceGround: true
+        replaceGround: true,
+        isVoid: false
     };
 
     if (groundOverlay === 1) {
@@ -246,7 +275,7 @@ function getOverlaySettings(groundOverlay) {
         // Wood floor
         overlaySettings.block = context.getBlock("spruce_planks");
     } else if (groundOverlay === 4) {
-        // Bridge
+        // Bridge (needs to blend with wood floor, above)
         overlaySettings.block = context.getBlock("dark_oak_planks");
     } else if (groundOverlay === 5) {
         // Swamp
@@ -258,8 +287,9 @@ function getOverlaySettings(groundOverlay) {
         // Floor tiles
         overlaySettings.block = context.getBlock("muddy_mangrove_roots");
     } else if (groundOverlay === 8) {
-        // Ladder hole
+        // Void
         overlaySettings.block = context.getBlock("black_concrete");
+        overlaySettings.isVoid = true;
     } else if (groundOverlay === 9) {
         // Cliffs
         overlaySettings.block = context.getBlock("stone");
@@ -273,7 +303,7 @@ function getOverlaySettings(groundOverlay) {
         // Digsite
         overlaySettings.block = context.getBlock("brown_wool");
     } else if (groundOverlay === 250) {
-        // Void
+        // Out of bounds area
         overlaySettings.block = context.getBlock("black_concrete");
     } else {
         player.print("Unknown overlay: " + groundOverlay);
@@ -630,11 +660,8 @@ function main() {
                     player.print("Loading sector: " + sectorId);
                     var sector = loadSector(landscapeArchive, sectorEntry);
 
-                    // TMP: Handle other layers
-                    if (layer === 0) {
-                        player.print("Processing sector: " + sectorId);
-                        processSector(layer, sectorX, sectorY, sector);
-                    }
+                    player.print("Processing sector: " + sectorId);
+                    processSector(layer, sectorX, sectorY, sector);
 
                 } else {
                     player.printError("Invalid sector: " + sectorId);
