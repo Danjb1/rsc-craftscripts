@@ -54,7 +54,8 @@ const SEA_LEVEL = 63;
 const BEDROCK_LEVEL = 60;
 const MAX_TERRAIN_HEIGHT = 9;
 
-// Roof replaces the top block of the wall (if present)
+// If a tile has a roof, it will take the place of the topmost wall block.
+// Otherwise, we keep the walls high so that they merge with the layer above.
 const WALL_HEIGHT = 5;
 const ROOF_HEIGHT = WALL_HEIGHT;
 
@@ -93,45 +94,61 @@ function processSector(sector, sectorX, sectorY, clean) {
         }
     }
 
-    // For each tile in the sector...
+    /*
+     * We have to build structures in a careful order, otherwise floors might
+     * overwrite wall blocks of the previous layer, or walls placed in
+     * neighbouring tiles might overwrite the roof blocks there.
+     */
+
+    // Build floors
     for (var tileX = 0; tileX < SECTOR_SIZE; tileX++) {
         for (var tileY = 0; tileY < SECTOR_SIZE; tileY++) {
-            processTile(sectorMinBlockPos, sector, tileX, tileY);
+            buildFloors(sectorMinBlockPos, sector, tileX, tileY);
         }
     }
+
+    // Build walls
+    for (var tileX = 0; tileX < SECTOR_SIZE; tileX++) {
+        for (var tileY = 0; tileY < SECTOR_SIZE; tileY++) {
+            buildWalls(sectorMinBlockPos, sector, tileX, tileY);
+        }
+    }
+
+    // Build roofs
+    for (var tileX = 0; tileX < SECTOR_SIZE; tileX++) {
+        for (var tileY = 0; tileY < SECTOR_SIZE; tileY++) {
+            buildRoofs(sectorMinBlockPos, sector, tileX, tileY);
+        }
+    }
+
+    // Reverse iteration code, if needed...
+    // for (var tileX = SECTOR_SIZE - 1; tileX >= 0; tileX--) {
+    //     for (var tileY = SECTOR_SIZE - 1; tileY >= 0; tileY--) {
+    //     }
+    // }
 }
 
-function processTile(sectorMinBlockPos, sector, tileX, tileY) {
-    // We need to store ground tile settings as they can affect all layers
-    var groundElevation = 0;
-    var groundOverlaySettings = null;
+function buildFloors(sectorMinBlockPos, sector, tileX, tileY) {
+    // Find block position corresponding to tile (at lowest possible point)
+    var blockPos = getBlockPosForTile(sectorMinBlockPos, tileX, tileY);
 
     // Build each layer in turn
     for (var layer = 0; layer < NUM_LAYERS; layer++) {
         var tile = sector[layer][tileX][tileY];
 
-        // Find block position corresponding to tile (at lowest possible point)
-        var blockPos = getBlockPosForTile(sectorMinBlockPos, tileX, tileY);
-
-        ////////////////////////////////////////////////////////////////////////
-        // Ground
-        ////////////////////////////////////////////////////////////////////////
+        // Data structure to store Minecraft-specific data
+        tile.mc = {};
 
         // Get tile overlay settings
-        var overlaySettings = null;
         if (tile.groundOverlay) {
-            overlaySettings = getOverlaySettings(tile.groundOverlay);
+            tile.mc.overlaySettings = getOverlaySettings(tile.groundOverlay);
         }
 
         // Pick the block type based on the tile color
         var blockType = getBlockTypeFromPalette(tile.groundTexture);
 
-        var elevation = 0;
-
         // Determine desired elevation and place supporting blocks
         if (layer === 0) {
-            groundOverlaySettings = overlaySettings;
-
             // Place bedrock as a base
             var bedrock = context.getBlock("bedrock");
             blocks.setBlock(blockPos, bedrock);
@@ -143,48 +160,53 @@ function processTile(sectorMinBlockPos, sector, tileX, tileY) {
 
             // RSC elevation seems to range from: 0 (highest point) to 256 (lowest point),
             // which we map to the range: 9 (highest point) to 1 (lowest point).
-            elevation = 5 + ((tile.groundElevation) / 32);
-            if (overlaySettings && overlaySettings.overrideElevation) {
-                elevation = overlaySettings.overrideElevation;
+            tile.mc.elevation = 5 + ((tile.groundElevation) / 32);
+            if (tile.mc.overlaySettings && tile.mc.overlaySettings.overrideElevation) {
+                tile.mc.elevation = tile.mc.overlaySettings.overrideElevation;
             }
-
-            // This is needed by subsequent layers
-            groundElevation = elevation;
 
             // Place supporting blocks up to the desired elevation
-            for (var i = 1; i < elevation; i++) {
+            for (var i = 1; i < tile.mc.elevation; i++) {
                 blockPos = blockPos.withY(BEDROCK_LEVEL + i);
-                if (i < elevation) {
-                    blocks.setBlock(blockPos, supportType);
-                }
+                blocks.setBlock(blockPos, supportType);
             }
         } else {
-            elevation = groundElevation + layer * WALL_HEIGHT;
+            var groundElevation = sector[0][tileX][tileY].mc.elevation;
+            tile.mc.elevation = groundElevation + layer * WALL_HEIGHT;
         }
 
         // Place ground
         if (layer === 0) {
-            blockPos = blockPos.withY(BEDROCK_LEVEL + elevation);
+            blockPos = blockPos.withY(BEDROCK_LEVEL + tile.mc.elevation);
             blocks.setBlock(blockPos, blockType);
         }
 
         // Place overlay block
-        if (isOverlayPermitted(layer, overlaySettings)) {
-            if (!overlaySettings.replaceGround) {
-                elevation += 1;
+        if (isOverlayPermitted(layer, tile.mc.overlaySettings)) {
+            var overlayY = BEDROCK_LEVEL + tile.mc.elevation;
+            if (!tile.mc.overlaySettings.replaceGround) {
+                overlayY += 1;
             }
-            blockPos = blockPos.withY(BEDROCK_LEVEL + elevation);
-            blocks.setBlock(blockPos, overlaySettings.block);
+            blockPos = blockPos.withY(overlayY);
+            blocks.setBlock(blockPos, tile.mc.overlaySettings.block);
         }
+    }
+}
 
-        ////////////////////////////////////////////////////////////////////////
-        // Walls
-        ////////////////////////////////////////////////////////////////////////
+function buildWalls(sectorMinBlockPos, sector, tileX, tileY) {
+    // Find block position corresponding to tile (at lowest possible point)
+    var blockPos = getBlockPosForTile(sectorMinBlockPos, tileX, tileY);
 
-        var indoors = isTileIndoors(overlaySettings, groundOverlaySettings);
+    var groundOverlaySettings = sector[0][tileX][tileY].mc.overlaySettings;
+
+    // Build each layer in turn
+    for (var layer = 0; layer < NUM_LAYERS; layer++) {
+        var tile = sector[layer][tileX][tileY];
+
+        tile.mc.indoors = isTileIndoors(tile.mc.overlaySettings, groundOverlaySettings);
         var wallType = tile.topBorderWall || tile.rightBorderWall || tile.diagonalWalls;
         var hasWall = wallType > 0 && wallType < 48000;
-        var roofHeight = ROOF_HEIGHT;
+
         if (hasWall) {
             // Normalize wall type
             if (wallType >= 48000) {
@@ -195,7 +217,7 @@ function processTile(sectorMinBlockPos, sector, tileX, tileY) {
 
             // Determine the wall's facing
             var facing;
-            if (indoors) {
+            if (tile.mc.indoors) {
                 if (tile.topBorderWall) {
                     facing = "south";
                 } else {
@@ -210,61 +232,173 @@ function processTile(sectorMinBlockPos, sector, tileX, tileY) {
             }
 
             // Get wall settings
-            var wallSettings = getWallSettings(tile, wallType, indoors, facing);
-            roofHeight = wallSettings.height;
+            var wallSettings = getWallSettings(tile, wallType, tile.mc.indoors, facing);
 
             // Place walls at the appropriate locations.
             // This is essentially unsolveable since walls in RS are 2D, but we
-            // take the approach of placing walls for "indoor" tiles on the
-            // neighbouring tile, and placing walls for "outdoor" tiles on the
-            // current tile. This ensures that buildings stay approximately the
-            // correct size.
-            // TODO: This causes problems at sector boundaries
-            if (indoors) {
+            // take a best-effort approach of always placing walls to the
+            // north-east of the tile that defines them.
+            // TODO: This causes problems at sector boundaries.
+            // TODO: The shifted walls can overlap with adjacent objects.
+            if (tile.mc.indoors) {
                 if (tile.rightBorderWall && tile.topBorderWall) {
                     // Inside corner: we need to place THREE neighbouring blocks
-                    // (the 2 shifted edges, plus a corner block)
+                    // (the 2 shifted edges, plus a corner block). If this wall
+                    // has a door, it should only be placed once!
+                    var savedDoorBlock = wallSettings.doorBlock;
+                    wallSettings.doorBlock = null;
                     var wallPos = blockPos.add(1, 0, 0);
-                    buildWall(layer, wallPos, elevation, wallSettings);
-                    wallPos = blockPos.add(0, 0, -1);
-                    buildWall(layer, wallPos, elevation, wallSettings);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
                     wallPos = blockPos.add(1, 0, -1);
-                    buildWall(layer, wallPos, elevation, wallSettings);
-                } else if (tile.rightBorderWall) {
-                    // Inside edge: shift the wall outwards
-                    var wallPos = blockPos.add(1, 0, 0);
-                    buildWall(layer, wallPos, elevation, wallSettings);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    wallSettings.doorBlock = savedDoorBlock;
+                    wallPos = blockPos.add(0, 0, -1);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else if (tile.topBorderWall) {
-                    // Inside edge: shift the wall outwards
+                    // Top wall: shift up
                     var wallPos = blockPos.add(0, 0, -1);
-                    buildWall(layer, wallPos, elevation, wallSettings);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                } else if (tile.rightBorderWall) {
+                    // Right wall: shift right
+                    var wallPos = blockPos.add(1, 0, 0);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else {
                     // Diagonal wall: just place a wall at the current tile
-                    buildWall(layer, blockPos, elevation, wallSettings);
+                    buildWall(tile, layer, blockPos, tile.mc.elevation, wallSettings);
                 }
-            } else {
-                // Just place a wall at the current tile
-                buildWall(layer, blockPos, elevation, wallSettings);
+            } else /* outdoor wall */ {
+                if (tile.topBorderWall) {
+                    // Top wall: shift up
+                    var wallPos = blockPos.add(0, 0, -1);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                } else if (tile.rightBorderWall) {
+                    // Right wall: shift right
+                    var wallPos = blockPos.add(1, 0, 0);
+                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                } else {
+                    // Diagonal wall: just place a wall at the current tile
+                    buildWall(tile, layer, blockPos, tile.mc.elevation, wallSettings);
+                }
             }
         }
 
-        ////////////////////////////////////////////////////////////////////////
-        // Objects
-        ////////////////////////////////////////////////////////////////////////
-
+        // Place objects
         if (wallType >= 48000) {
             var objectId = wallType - 48000;
-            placeObject(objectId, blockPos.withY(BEDROCK_LEVEL + elevation));
+            placeObject(objectId, blockPos.withY(BEDROCK_LEVEL + tile.mc.elevation));
         }
+    }
+}
 
-        ////////////////////////////////////////////////////////////////////////
-        // Roof
-        ////////////////////////////////////////////////////////////////////////
+
+function buildRoofs(sectorMinBlockPos, sector, tileX, tileY) {
+    // Find block position corresponding to tile (at lowest possible point)
+    var blockPos = getBlockPosForTile(sectorMinBlockPos, tileX, tileY);
+
+    // Build each layer in turn
+    for (var layer = 0; layer < NUM_LAYERS; layer++) {
+        var tile = sector[layer][tileX][tileY];
 
         if (tile.roofTexture) {
-            blockPos = blockPos.withY(BEDROCK_LEVEL + elevation + roofHeight);
-            // TODO: Not all roofs use the same texture
-            blocks.setBlock(blockPos, context.getBlock("polished_granite"));
+            var roofY = BEDROCK_LEVEL + tile.mc.elevation + ROOF_HEIGHT;
+            blockPos = blockPos.withY(roofY);
+
+            // If this is the edge of roof, place a roof edge over the
+            // neighbouring blocks
+            try {
+                var northTile = sector[layer][tileX][tileY - 1];
+                var eastTile = sector[layer][tileX - 1][tileY];
+
+                if (!northTile.roofTexture && !eastTile.roofTexture) {
+                    // North-eastern tile is the corner of the roof
+                    var roofPos = blockPos.add(1, 0, -1);
+                    placeRoof(tile.roofTexture, roofPos, "west,shape=outer_left");
+                    roofPos = blockPos.add(1, 0, 0);
+                    placeRoof(tile.roofTexture, roofPos, "west");
+                    roofPos = blockPos.add(0, 0, -1);
+                    placeRoof(tile.roofTexture, roofPos, "south");
+                } else if (!northTile.roofTexture) {
+                    // Northern tile is the top edge of the roof
+                    var roofPos = blockPos.add(0, 0, -1);
+                    placeRoof(tile.roofTexture, roofPos, "south");
+                } else if (!eastTile.roofTexture) {
+                    // Eastern tile is the right edge of the roof
+                    var roofPos = blockPos.add(1, 0, 0);
+                    placeRoof(tile.roofTexture, roofPos, "west");
+                } else {
+                    // Central roof block
+                    placeRoof(tile.roofTexture, blockPos, null);
+                }
+            } catch (err) {
+                // Tried to cross a sector boundary. Ignore this for now.
+                // Roofs at sector boundaries will look messed up.
+                placeRoof(tile.roofTexture, blockPos, null);
+            }
+
+            // Finally, place a roof over the current tile
+            placeRoof(tile.roofTexture, blockPos, null);
+
+        } else if (tile.topBorderWall) {
+            // This tile is an outside wall, so its neighbour might be the edge
+            // of a roof
+            try {
+                var northTile = sector[layer][tileX][tileY - 1];
+                var northEastTile = sector[layer][tileX - 1][tileY - 1];
+
+                if (northTile.roofTexture) {
+                    var roofY = BEDROCK_LEVEL + tile.mc.elevation + ROOF_HEIGHT;
+
+                    if (!northEastTile.roofTexture) {
+                        // North-eastern tile is the bottom-right corner of the roof
+                        var roofPos = blockPos.withY(roofY).add(1, 0, -1);
+                        placeRoof(northTile.roofTexture, roofPos, "north,shape=outer_left");
+                    }
+
+                    // Northern tile is the bottom edge of the roof
+                    var roofPos = blockPos.withY(roofY).add(0, 0, -1);
+                    placeRoof(northTile.roofTexture, roofPos, "north");
+                }
+            } catch (err) {
+                // Tried to cross a sector boundary. Ignore this for now.
+                // Roofs at sector boundaries will look messed up.
+            }
+        } else if (tile.rightBorderWall) {
+            // This tile is an outside wall, so its neighbour might be the edge
+            // of a roof
+            try {
+                var eastTile = sector[layer][tileX - 1][tileY];
+                var northEastTile = sector[layer][tileX - 1][tileY - 1];
+
+                if (eastTile.roofTexture) {
+                    var roofY = BEDROCK_LEVEL + tile.mc.elevation + ROOF_HEIGHT;
+
+                    if (!northEastTile.roofTexture) {
+                        // North-eastern tile is the top-left corner of the roof
+                        var roofPos = blockPos.withY(roofY).add(1, 0, -1);
+                        placeRoof(eastTile.roofTexture, roofPos, "south,shape=outer_left");
+                    }
+
+                    // Eastern tile is the left edge of the roof
+                    var roofPos = blockPos.withY(roofY).add(1, 0, 0);
+                    placeRoof(eastTile.roofTexture, roofPos, "east");
+                }
+            } catch (err) {
+                // Tried to cross a sector boundary. Ignore this for now.
+                // Roofs at sector boundaries will look messed up.
+            }
+        } else {
+            try {
+                var northEastTile = sector[layer][tileX - 1][tileY - 1];
+                if (northEastTile.roofTexture) {
+                    var roofY = BEDROCK_LEVEL + tile.mc.elevation + ROOF_HEIGHT;
+                    // North-eastern tile is the bottom-left corner of the roof
+                    var roofPos = blockPos.withY(roofY).add(1, 0, -1);
+                    placeRoof(northEastTile.roofTexture, roofPos, "east,shape=outer_left");
+                }
+            } catch (err) {
+                // Tried to cross a sector boundary. Ignore this for now.
+                // Roofs at sector boundaries will look messed up.
+            }
         }
     }
 }
@@ -390,7 +524,8 @@ function getWallSettings(tile, wallType, indoors, facing) {
         block: context.getBlock("red_wool"),
         height: WALL_HEIGHT,
         doorBlock: null,
-        windowBlock: null
+        windowBlock: null,
+        cornerBlock: null
     };
 
     if (wallType === 1) {
@@ -400,19 +535,19 @@ function getWallSettings(tile, wallType, indoors, facing) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 3) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 4) {
         // Stone wall window
         wallSettings.block = context.getBlock("stone_bricks");
         if (tile.diagonalWalls) {
             wallSettings.windowBlock = context.getBlock("glass");
-        } else if (facing === "east") {
-            wallSettings.windowBlock = context.getBlock("glass_pane[north=true,south=true]");
         } else {
-            wallSettings.windowBlock = context.getBlock("glass_pane[east=true,west=true]");
+            wallSettings.windowBlock = context.getBlock("glass_pane" + getWindowProperties(facing));
         }
     } else if (wallType === 5) {
         // Wooden fence
@@ -427,10 +562,8 @@ function getWallSettings(tile, wallType, indoors, facing) {
         wallSettings.block = context.getBlock("stone_bricks");
         if (tile.diagonalWalls) {
             wallSettings.windowBlock = context.getBlock("glass");
-        } else if (facing === "east") {
-            wallSettings.windowBlock = context.getBlock("blue_stained_glass_pane[north=true,south=true]");
         } else {
-            wallSettings.windowBlock = context.getBlock("blue_stained_glass_pane[east=true,west=true]");
+            wallSettings.windowBlock = context.getBlock("glass_pane" + getWindowProperties(facing));
         }
     } else if (wallType === 8) {
         // Stone wall (extra tall?)
@@ -439,26 +572,28 @@ function getWallSettings(tile, wallType, indoors, facing) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 14) {
         // Stone wall window
         wallSettings.block = context.getBlock("stone_bricks");
         if (tile.diagonalWalls) {
             wallSettings.windowBlock = context.getBlock("glass");
-        } else if (facing === "east") {
-            wallSettings.windowBlock = context.getBlock("glass_pane[north=true,south=true]");
         } else {
-            wallSettings.windowBlock = context.getBlock("glass_pane[east=true,west=true]");
+            wallSettings.windowBlock = context.getBlock("glass_pane" + getWindowProperties(facing));
         }
     } else if (wallType === 15) {
         // Plaster / panelled wall
-        wallSettings.block = getBlockForPanelledWall(tile);
+        wallSettings.block = context.getBlock("mushroom_stem");
+        wallSettings.cornerBlock = context.getBlock("stripped_jungle_log");
     } else if (wallType === 16) {
         // Panelled window
-        wallSettings.block = getBlockForPanelledWall(tile);
+        wallSettings.block = context.getBlock("mushroom_stem");
+        wallSettings.cornerBlock = context.getBlock("stripped_jungle_log");
         wallSettings.windowBlock = context.getBlock("jungle_trapdoor[open=true,facing=" + facing + "]");
     } else if (wallType === 17) {
         // Opening (with overhang above)
         wallSettings.block = context.getBlock("air");
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 19) {
         // Slimy wall
         wallSettings.block = context.getBlock("mossy_stone_bricks");
@@ -466,34 +601,54 @@ function getWallSettings(tile, wallType, indoors, facing) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 44) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 45) {
+        // Doorway
+        wallSettings.block = getDoorwayWallBlock(facing);
+        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 57) {
+        // Wooden wall
+        wallSettings.block = context.getBlock("spruce_planks");
     } else if (wallType === 63) {
         // Stone fence
         wallSettings.block = context.getBlock("stone_brick_wall");
         wallSettings.height = 2;
+    } else if (wallType === 67) {
+        // Doorway
+        wallSettings.block = getDoorwayWallBlock(facing);
+        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 95) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 110) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 121) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 123) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 124) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 128) {
         // Wooden fence (extra short)
         wallSettings.block = context.getBlock("jungle_fence");
@@ -502,27 +657,17 @@ function getWallSettings(tile, wallType, indoors, facing) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 153) {
         // Doorway
         wallSettings.block = getDoorwayWallBlock(facing);
         wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        wallSettings.ensureAboveGround = true;
     } else {
         player.print("Unknown wall type: " + wallType);
     }
 
     return wallSettings;
-}
-
-function getBlockForPanelledWall(tile) {
-    // To give some extra texture, we use wood for the corners.
-    // TODO: This only works for some corners. At other corners it is
-    // the tile on the *outside* of the building that is responsible
-    // for generating the wall.
-    if (tile.rightBorderWall && tile.topBorderWall) {
-        return context.getBlock("stripped_jungle_log");
-    } else {
-        return context.getBlock("mushroom_stem");
-    }
 }
 
 // The goal here is to return something inoffensive since we don't know what
@@ -537,18 +682,32 @@ function getAxisFromFacing(facing) {
     return (facing === "east" || facing === "west") ? "x" : "z";
 }
 
-function buildWall(layer, wallPos, elevation, wallSettings) {
-    var startY = -1;
+function getWindowProperties(facing) {
+    if (facing === "east" || facing === "west") {
+        return "[north=true,south=true]";
+    } else {
+        return "[east=true,west=true]";
+    }
+}
 
-    if (wallSettings.doorBlock) {
+function buildWall(tile, layer, wallPos, elevation, wallSettings) {
+    var startY = 0;
+
+    // Determine wall start
+    if (wallSettings.ensureAboveGround) {
         startY = 1;
     } else if (layer === 0) {
         // Start underground in case the wall is on a steep slope
         startY = -5;
     }
 
-    for (var i = startY; i <= wallSettings.height; i++) {
+    // Determine wall end
+    var endY = wallSettings.height;
+
+    // Build the wall
+    for (var i = startY; i <= endY; i++) {
         wallPos = wallPos.withY(BEDROCK_LEVEL + elevation + i);
+
         if (wallSettings.doorBlock && i == 1) {
             // Door (lower)
             // TODO: Place an air block in front of the door in case it
@@ -562,6 +721,8 @@ function buildWall(layer, wallPos, elevation, wallSettings) {
         } else if (wallSettings.windowBlock && i > 1 && i < wallSettings.height - 1) {
             // Window
             blocks.setBlock(wallPos, wallSettings.windowBlock);
+        } else if (wallSettings.cornerBlock && i % 4 === 0) {
+            blocks.setBlock(wallPos, wallSettings.cornerBlock);
         } else {
             blocks.setBlock(wallPos, wallSettings.block);
         }
@@ -678,6 +839,29 @@ function placeTree(blockPos) {
 
     // Fallback
     blocks.setBlock(blockPos, context.getBlock("dead_bush"));
+}
+
+function placeRoof(roofTexture, blockPos, facing) {
+    if (roofTexture === 1) {
+        if (facing === "slab") {
+            blocks.setBlock(blockPos, context.getBlock("polished_granite_slab"));
+        } else if (facing) {
+            blocks.setBlock(blockPos, context.getBlock("polished_granite_stairs[facing=" + facing + "]"));
+        } else {
+            blocks.setBlock(blockPos, context.getBlock("polished_granite"));
+        }
+    } else if (roofTexture === 2) {
+        if (facing === "slab") {
+            blocks.setBlock(blockPos, context.getBlock("spruce_slab"));
+        } else if (facing) {
+            blocks.setBlock(blockPos, context.getBlock("spruce_stairs[facing=" + facing + "]"));
+        } else {
+            blocks.setBlock(blockPos, context.getBlock("spruce_planks"));
+        }
+    } else {
+        player.print("Unknown roof texture: " + roofTexture);
+        blocks.setBlock(blockPos, context.getBlock("pink_wool"));
+    }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
