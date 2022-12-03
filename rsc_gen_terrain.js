@@ -204,16 +204,10 @@ function buildWalls(sectorMinBlockPos, sector, tileX, tileY) {
         var tile = sector[layer][tileX][tileY];
 
         tile.mc.indoors = isTileIndoors(tile.mc.overlaySettings, groundOverlaySettings);
-        var wallType = tile.topBorderWall || tile.rightBorderWall || tile.diagonalWalls;
-        var hasWall = wallType > 0 && wallType < 48000;
+        var wallType = getWallType(tile);
 
-        if (hasWall) {
-            // Normalize wall type
-            if (wallType >= 48000) {
-                wallType -= 48000;
-            } else if (wallType >= 12000) {
-                wallType -= 12000;
-            }
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
 
             // Determine the wall's facing
             var facing;
@@ -232,7 +226,7 @@ function buildWalls(sectorMinBlockPos, sector, tileX, tileY) {
             }
 
             // Get wall settings
-            var wallSettings = getWallSettings(tile, wallType, tile.mc.indoors, facing);
+            var wallSettings = getWallSettings(tile, wallType, facing);
 
             // Place walls at the appropriate locations.
             // This is essentially unsolveable since walls in RS are 2D, but we
@@ -248,36 +242,36 @@ function buildWalls(sectorMinBlockPos, sector, tileX, tileY) {
                     var savedDoorBlock = wallSettings.doorBlock;
                     wallSettings.doorBlock = null;
                     var wallPos = blockPos.add(1, 0, 0);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                     wallPos = blockPos.add(1, 0, -1);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                     wallSettings.doorBlock = savedDoorBlock;
                     wallPos = blockPos.add(0, 0, -1);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else if (tile.topBorderWall) {
                     // Top wall: shift up
                     var wallPos = blockPos.add(0, 0, -1);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else if (tile.rightBorderWall) {
                     // Right wall: shift right
                     var wallPos = blockPos.add(1, 0, 0);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else {
                     // Diagonal wall: just place a wall at the current tile
-                    buildWall(tile, layer, blockPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, blockPos, tile.mc.elevation, wallSettings);
                 }
             } else /* outdoor wall */ {
                 if (tile.topBorderWall) {
                     // Top wall: shift up
                     var wallPos = blockPos.add(0, 0, -1);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else if (tile.rightBorderWall) {
                     // Right wall: shift right
                     var wallPos = blockPos.add(1, 0, 0);
-                    buildWall(tile, layer, wallPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, wallPos, tile.mc.elevation, wallSettings);
                 } else {
                     // Diagonal wall: just place a wall at the current tile
-                    buildWall(tile, layer, blockPos, tile.mc.elevation, wallSettings);
+                    buildWall(sector, tileX, tileY, layer, blockPos, tile.mc.elevation, wallSettings);
                 }
             }
         }
@@ -290,6 +284,22 @@ function buildWalls(sectorMinBlockPos, sector, tileX, tileY) {
     }
 }
 
+function getWallType(tile) {
+    return tile.topBorderWall || tile.rightBorderWall || tile.diagonalWalls;
+}
+
+function isWall(wallType) {
+    return wallType > 0 && wallType < 48000;
+}
+
+function normalizeWallType(wallType) {
+    if (wallType >= 48000) {
+        return wallType - 48000;
+    } else if (wallType >= 12000) {
+        return wallType - 12000;
+    }
+    return wallType;
+}
 
 function buildRoofs(sectorMinBlockPos, sector, tileX, tileY) {
     // Find block position corresponding to tile (at lowest possible point)
@@ -471,21 +481,50 @@ function getOverlaySettings(groundOverlay) {
         overlaySettings.block = context.getBlock("black_concrete");
         overlaySettings.isVoid = true;
     } else if (groundOverlay === 9) {
-        // Cliffs
+        // Cliff
         overlaySettings.block = context.getBlock("andesite");
     } else if (groundOverlay === 11) {
         // Lava
         overlaySettings.block = context.getBlock("lava");
+    } else if (groundOverlay === 12) {
+        // Sloped bridge (Mage Arena)
+        overlaySettings.block = context.getBlock("spruce_planks");
+    } else if (groundOverlay === 13) {
+        // Cyan carpet
+        overlaySettings.block = context.getBlock("cyan_wool");
+        overlaySettings.indoors = true;
+    } else if (groundOverlay === 14) {
+        // Star summoning circle
+        overlaySettings.block = context.getBlock("gray_glazed_terracotta");
+        overlaySettings.indoors = true;
     } else if (groundOverlay === 15) {
         // Purple carpet
         overlaySettings.block = context.getBlock("purple_wool");
         overlaySettings.indoors = true;
+    } else if (groundOverlay === 16) {
+        // Digsite hole (?)
+        overlaySettings.block = context.getBlock("black_concrete");
+        overlaySettings.isVoid = true;
+    } else if (groundOverlay === 17) {
+        // Marble
+        overlaySettings.block = context.getBlock("chiseled_quartz_block");
+    } else if (groundOverlay === 19) {
+        // Natural bridge (south of Tai Bwo Wannai)
+        // (not sure what this is supposed to be exactly)
+        overlaySettings.block = context.getBlock("gravel");
     } else if (groundOverlay === 20) {
-        // Agility training area - log?
+        // Log bridge
+        overlaySettings.block = context.getBlock("oak_log");
+    } else if (groundOverlay === 21) {
+        // Log bridge
         overlaySettings.block = context.getBlock("oak_log");
     } else if (groundOverlay === 23) {
         // Digsite
         overlaySettings.block = context.getBlock("brown_wool");
+    } else if (groundOverlay === 24) {
+        // Cliff (mud)
+        // (overlay seems redundant)
+        overlaySettings.block = context.getBlock("air");
     } else if (groundOverlay === 250) {
         // Out of bounds area
         overlaySettings.block = context.getBlock("black_concrete");
@@ -519,7 +558,7 @@ function isTileIndoors(overlaySettings, groundOverlaySettings) {
     return overlaySettings.indoors;
 }
 
-function getWallSettings(tile, wallType, indoors, facing) {
+function getWallSettings(tile, wallType, facing) {
     var wallSettings = {
         block: context.getBlock("red_wool"),
         height: WALL_HEIGHT,
@@ -528,19 +567,17 @@ function getWallSettings(tile, wallType, indoors, facing) {
         cornerBlock: null
     };
 
+    // TODO: Comment where Doorways are located
+
     if (wallType === 1) {
         // Stone wall
         wallSettings.block = context.getBlock("stone_bricks");
     } else if (wallType === 2) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
     } else if (wallType === 3) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
     } else if (wallType === 4) {
         // Stone wall window
         wallSettings.block = context.getBlock("stone_bricks");
@@ -553,10 +590,12 @@ function getWallSettings(tile, wallType, indoors, facing) {
         // Wooden fence
         wallSettings.block = context.getBlock("jungle_fence");
         wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 6) {
         // Metal fence
         wallSettings.block = context.getBlock("iron_bars");
         wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 7) {
         // Stained glass window
         wallSettings.block = context.getBlock("stone_bricks");
@@ -570,8 +609,11 @@ function getWallSettings(tile, wallType, indoors, facing) {
         wallSettings.block = context.getBlock("stone_bricks");
     } else if (wallType === 9) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 11) {
+        // Stone fence (short)
+        wallSettings.block = context.getBlock("stone_brick_wall");
+        wallSettings.height = 1;
         wallSettings.ensureAboveGround = true;
     } else if (wallType === 14) {
         // Stone wall window
@@ -597,77 +639,242 @@ function getWallSettings(tile, wallType, indoors, facing) {
     } else if (wallType === 19) {
         // Slimy wall
         wallSettings.block = context.getBlock("mossy_stone_bricks");
+    } else if (wallType === 23) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 24) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 25) {
+        // Invisible? (Wilderness, Deserted Keep)
+        wallSettings.block = context.getBlock("air");
         wallSettings.ensureAboveGround = true;
+    } else if (wallType === 31) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 33) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 35) {
+        // Stone wall window (arch)
+        wallSettings.block = context.getBlock("stone_bricks");
+        wallSettings.windowBlock = context.getBlock("air");
+    } else if (wallType === 40) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 41) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 39) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 42) {
+        // Broken stone wall
+        wallSettings.block = context.getBlock("cracked_stone_bricks");
+        wallSettings.height = Math.random() * WALL_HEIGHT;
+    } else if (wallType === 43) {
+        // Brick wall (Shantay Pass)
+        wallSettings.block = context.getBlock("granite");
     } else if (wallType === 44) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
     } else if (wallType === 45) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 49) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 50) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 51) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 55) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 57) {
         // Wooden wall
         wallSettings.block = context.getBlock("spruce_planks");
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 61) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 63) {
         // Stone fence
         wallSettings.block = context.getBlock("stone_brick_wall");
         wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 67) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 77) {
+        // Interior stone wall (Brimhaven)
+        wallSettings.block = context.getBlock("stone_bricks");
+    } else if (wallType === 75) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 76) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 78) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 79) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 80) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 81) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 82) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 83) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 87) {
+        // Invisible wall
+        wallSettings.block = context.getBlock("barrier");
         wallSettings.ensureAboveGround = true;
     } else if (wallType === 95) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 100) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 102) {
+        // Gap in fence
+        // TODO: This should probably be a gate
+        wallSettings.block = context.getBlock("air");
         wallSettings.ensureAboveGround = true;
+    } else if (wallType === 101) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 110) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 111) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 113) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 120) {
+        // Wooden wall
+        wallSettings.block = context.getBlock("spruce_planks");
         wallSettings.ensureAboveGround = true;
     } else if (wallType === 121) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
     } else if (wallType === 123) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
     } else if (wallType === 124) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 127) {
+        // Wooden wall - glass window
+        wallSettings.block = context.getBlock("spruce_planks");
+        wallSettings.windowBlock = context.getBlock("glass_pane" + getWindowProperties(facing));
     } else if (wallType === 128) {
         // Wooden fence (extra short)
         wallSettings.block = context.getBlock("jungle_fence");
         wallSettings.height = 1;
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 139) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
-        wallSettings.ensureAboveGround = true;
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 145) {
+        // Wooden wall - wood window
+        wallSettings.block = context.getBlock("spruce_planks");
+        wallSettings.windowBlock = context.getBlock("oak_trapdoor[open=true,facing=" + facing + "]");
     } else if (wallType === 153) {
         // Doorway
-        wallSettings.block = getDoorwayWallBlock(facing);
-        wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 162) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 164) {
+        // Agility training area wall (?)
+        wallSettings.block = context.getBlock("stone_bricks");
+    } else if (wallType === 165) {
+        // Agility training area wall (?)
+        wallSettings.block = context.getBlock("stone_bricks");
+    } else if (wallType === 166) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 176) {
+        // Straw hut wall
+        wallSettings.block = context.getBlock("smooth_sandstone");
+    } else if (wallType === 177) {
+        // Opening (with overhang above)
+        wallSettings.block = context.getBlock("air");
         wallSettings.ensureAboveGround = true;
+    } else if (wallType === 178) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 179) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 182) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 183) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 184) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 185) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 194) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 195) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 197) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 198) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 199) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 200) {
+        // Gap in fence
+        // TODO: This should probably be a gate
+        wallSettings.block = context.getBlock("air");
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 206) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else {
         player.print("Unknown wall type: " + wallType);
     }
 
     return wallSettings;
+}
+
+function setDoorway(facing, wallSettings) {
+    wallSettings.block = getDoorwayWallBlock(facing);
+    wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
+    wallSettings.ensureAboveGround = true;
 }
 
 // The goal here is to return something inoffensive since we don't know what
@@ -690,7 +897,7 @@ function getWindowProperties(facing) {
     }
 }
 
-function buildWall(tile, layer, wallPos, elevation, wallSettings) {
+function buildWall(sector, tileX, tileY, layer, wallPos, elevation, wallSettings) {
     var startY = 0;
 
     // Determine wall start
@@ -708,16 +915,26 @@ function buildWall(tile, layer, wallPos, elevation, wallSettings) {
     for (var i = startY; i <= endY; i++) {
         wallPos = wallPos.withY(BEDROCK_LEVEL + elevation + i);
 
-        if (wallSettings.doorBlock && i == 1) {
-            // Door (lower)
-            // TODO: Place an air block in front of the door in case it
-            // is embedded in the ground.
-            var doorBlock = wallSettings.doorBlock.replace("]", ",half=lower]");
-            blocks.setBlock(wallPos, context.getBlock(doorBlock));
-        } else if (wallSettings.doorBlock && i == 2) {
-            // Door (upper)
-            var doorBlock = wallSettings.doorBlock.replace("]", ",half=upper]");
-            blocks.setBlock(wallPos, context.getBlock(doorBlock));
+        if (wallSettings.doorBlock) {
+            if (i === 1) {
+                // Door (lower)
+                // TODO: Place an air block in front of the door in case it
+                // is embedded in the ground.
+                var doorBlock = wallSettings.doorBlock.replace("]", ",half=lower]");
+                blocks.setBlock(wallPos, context.getBlock(doorBlock));
+            } else if (i === 2) {
+                // Door (upper)
+                var doorBlock = wallSettings.doorBlock.replace("]", ",half=upper]");
+                blocks.setBlock(wallPos, context.getBlock(doorBlock));
+            } else {
+                var doorBlock = getNeighbouringWallBlock(sector, layer, tileX, tileY);
+                if (doorBlock) {
+                    blocks.setBlock(wallPos, doorBlock);
+                } else {
+                    // No neighbouring wall found
+                    blocks.setBlock(wallPos, wallSettings.block);
+                }
+            }
         } else if (wallSettings.windowBlock && i > 1 && i < wallSettings.height - 1) {
             // Window
             blocks.setBlock(wallPos, wallSettings.windowBlock);
@@ -727,6 +944,114 @@ function buildWall(tile, layer, wallPos, elevation, wallSettings) {
             blocks.setBlock(wallPos, wallSettings.block);
         }
     }
+}
+
+function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
+    try {
+        // North
+        var tile = sector[layer][tileX][tileY - 1];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // North-east
+        var tile = sector[layer][tileX - 1][tileY - 1];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // East
+        var tile = sector[layer][tileX - 1][tileY];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // South-east
+        var tile = sector[layer][tileX - 1][tileY + 1];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // South
+        var tile = sector[layer][tileX][tileY + 1];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // South-west
+        var tile = sector[layer][tileX + 1][tileY + 1];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // West
+        var tile = sector[layer][tileX + 1][tileY];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    try {
+        // North-west
+        var tile = sector[layer][tileX + 1][tileY - 1];
+        var wallType = getWallType(tile);
+        if (isWall(wallType)) {
+            wallType = normalizeWallType(wallType);
+            var wallSettings = getWallSettings(tile, wallType, null);
+            if (wallSettings.block) {
+                return wallSettings.block;
+            }
+        }
+    } catch (err) { /* Crossed a sector boundary */ }
+
+    return null;
 }
 
 function placeObject(objectId, groundPos) {
@@ -805,8 +1130,8 @@ function placeObject(objectId, groundPos) {
         // Railing
         blocks.setBlock(blockPos, context.getBlock("jungle_fence"));
     } else if (objectId === 61) {
-        // Fence gate
-        // TODO: This is not positioned in the fence!
+        // Wooden fence gate
+        // TODO: This is not positioned correctly
         blocks.setBlock(blockPos, context.getBlock("oak_fence_gate"));
     } else if (objectId === 62) {
         // Signpost
@@ -843,20 +1168,32 @@ function placeTree(blockPos) {
 
 function placeRoof(roofTexture, blockPos, facing) {
     if (roofTexture === 1) {
-        if (facing === "slab") {
-            blocks.setBlock(blockPos, context.getBlock("polished_granite_slab"));
-        } else if (facing) {
+        // Normal tile roof
+        if (facing) {
             blocks.setBlock(blockPos, context.getBlock("polished_granite_stairs[facing=" + facing + "]"));
         } else {
             blocks.setBlock(blockPos, context.getBlock("polished_granite"));
         }
     } else if (roofTexture === 2) {
-        if (facing === "slab") {
-            blocks.setBlock(blockPos, context.getBlock("spruce_slab"));
-        } else if (facing) {
+        // Wooden roof
+        if (facing) {
             blocks.setBlock(blockPos, context.getBlock("spruce_stairs[facing=" + facing + "]"));
         } else {
             blocks.setBlock(blockPos, context.getBlock("spruce_planks"));
+        }
+    } else if (roofTexture === 3) {
+        // Gray slate (exam centre)
+        if (facing) {
+            blocks.setBlock(blockPos, context.getBlock("cobbled_deepslate_stairs[facing=" + facing + "]"));
+        } else {
+            blocks.setBlock(blockPos, context.getBlock("cobbled_deepslate"));
+        }
+    } else if (roofTexture === 6) {
+        // Straw roof (Shantay Pass)
+        if (facing) {
+            blocks.setBlock(blockPos, context.getBlock("smooth_sandstone_stairs[facing=" + facing + "]"));
+        } else {
+            blocks.setBlock(blockPos, context.getBlock("smooth_sandstone"));
         }
     } else {
         player.print("Unknown roof texture: " + roofTexture);
