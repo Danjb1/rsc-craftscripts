@@ -234,11 +234,12 @@ function buildWalls(sectorMinBlockPos, sector, tileX, tileY) {
             // north-east of the tile that defines them.
             // TODO: This causes problems at sector boundaries.
             // TODO: The shifted walls can overlap with adjacent objects.
+            // TODO: The shifted walls can overwrite doors (e.g. Crafting Guild)
             if (tile.mc.indoors) {
                 if (tile.rightBorderWall && tile.topBorderWall) {
                     // Inside corner: we need to place THREE neighbouring blocks
-                    // (the 2 shifted edges, plus a corner block). If this wall
-                    // has a door, it should only be placed once!
+                    // (the 2 shifted edges, plus a corner block).
+                    // If this wall has a door, it should only be placed once!
                     var savedDoorBlock = wallSettings.doorBlock;
                     wallSettings.doorBlock = null;
                     var wallPos = blockPos.add(1, 0, 0);
@@ -508,6 +509,9 @@ function getOverlaySettings(groundOverlay) {
     } else if (groundOverlay === 17) {
         // Marble
         overlaySettings.block = context.getBlock("chiseled_quartz_block");
+    } else if (groundOverlay === 18) {
+        // Tree Gnome Village floor
+        overlaySettings.block = context.getBlock("spruce_planks");
     } else if (groundOverlay === 19) {
         // Natural bridge (south of Tai Bwo Wannai)
         // (not sure what this is supposed to be exactly)
@@ -659,13 +663,19 @@ function getWallSettings(tile, wallType, facing) {
         // Stone wall window (arch)
         wallSettings.block = context.getBlock("stone_bricks");
         wallSettings.windowBlock = context.getBlock("air");
+    } else if (wallType === 37) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 38) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 39) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 40) {
         // Doorway
         setDoorway(facing, wallSettings);
     } else if (wallType === 41) {
-        // Doorway
-        setDoorway(facing, wallSettings);
-    } else if (wallType === 39) {
         // Doorway
         setDoorway(facing, wallSettings);
     } else if (wallType === 42) {
@@ -708,6 +718,9 @@ function getWallSettings(tile, wallType, facing) {
     } else if (wallType === 67) {
         // Doorway
         setDoorway(facing, wallSettings);
+    } else if (wallType === 69) {
+        // Doorway (Crafting Guild)
+        setDoorway(facing, wallSettings);
     } else if (wallType === 77) {
         // Interior stone wall (Brimhaven)
         wallSettings.block = context.getBlock("stone_bricks");
@@ -739,7 +752,19 @@ function getWallSettings(tile, wallType, facing) {
         // Invisible wall
         wallSettings.block = context.getBlock("barrier");
         wallSettings.ensureAboveGround = true;
+    } else if (wallType === 94) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 95) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 97) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 98) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 99) {
         // Doorway
         setDoorway(facing, wallSettings);
     } else if (wallType === 100) {
@@ -762,6 +787,18 @@ function getWallSettings(tile, wallType, facing) {
     } else if (wallType === 113) {
         // Doorway
         setDoorway(facing, wallSettings);
+    } else if (wallType === 114) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 115) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 116) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 117) {
+        // Draynor Manor - upper wall (?)
+        wallSettings.block = context.getBlock("stone_bricks");
     } else if (wallType === 120) {
         // Wooden wall
         wallSettings.block = context.getBlock("spruce_planks");
@@ -787,10 +824,34 @@ function getWallSettings(tile, wallType, facing) {
     } else if (wallType === 139) {
         // Doorway
         setDoorway(facing, wallSettings);
+    } else if (wallType === 142) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 145) {
         // Wooden wall - wood window
         wallSettings.block = context.getBlock("spruce_planks");
         wallSettings.windowBlock = context.getBlock("oak_trapdoor[open=true,facing=" + facing + "]");
+    } else if (wallType === 146) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 147) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 148) {
+        // Opening (Yanille tower)
+        wallSettings.block = context.getBlock("air");
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 149) {
+        // Opening (Yanille tower)
+        wallSettings.block = context.getBlock("air");
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 150) {
+        // Opening (Yanille tower)
+        wallSettings.block = context.getBlock("air");
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 151) {
+        // Doorway
+        setDoorway(facing, wallSettings);
     } else if (wallType === 153) {
         // Doorway
         setDoorway(facing, wallSettings);
@@ -839,12 +900,25 @@ function getWallSettings(tile, wallType, facing) {
         wallSettings.block = context.getBlock("iron_bars");
         wallSettings.height = 2;
         wallSettings.ensureAboveGround = true;
+    } else if (wallType === 186) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
+    } else if (wallType === 187) {
+        // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 194) {
         // Fence, east of Baxtorian falls (doesn't appear in world viewer!)
         wallSettings.block = context.getBlock("iron_bars");
         wallSettings.height = 2;
         wallSettings.ensureAboveGround = true;
     } else if (wallType === 195) {
+        // Doorway
+        setDoorway(facing, wallSettings);
+    } else if (wallType === 196) {
         // Doorway
         setDoorway(facing, wallSettings);
     } else if (wallType === 197) {
@@ -861,6 +935,11 @@ function getWallSettings(tile, wallType, facing) {
         // TODO: This should probably be a gate
         wallSettings.block = context.getBlock("air");
         wallSettings.ensureAboveGround = true;
+    } else if (wallType === 202) {
+        // Broken bridge south of Yanille (?)
+        wallSettings.block = context.getBlock("iron_bars");
+        wallSettings.height = 2;
+        wallSettings.ensureAboveGround = true;
     } else if (wallType === 206) {
         // Doorway
         setDoorway(facing, wallSettings);
@@ -872,17 +951,11 @@ function getWallSettings(tile, wallType, facing) {
 }
 
 function setDoorway(facing, wallSettings) {
-    wallSettings.block = getDoorwayWallBlock(facing);
+    // Doors will try to blend with the surrounding blocks, but otherwise, we
+    // default to something inoffensive.
+    wallSettings.block = context.getBlock("glass");
     wallSettings.doorBlock = "oak_door[facing=" + facing + "]";
     wallSettings.ensureAboveGround = true;
-}
-
-// The goal here is to return something inoffensive since we don't know what
-// blocks it needs to blend with
-function getDoorwayWallBlock(facing) {
-    //var axis = getAxisFromFacing(facing);
-    //return context.getBlock("stripped_oak_log[axis=" + axis + "]");
-    return context.getBlock("glass");
 }
 
 function getAxisFromFacing(facing) {
@@ -927,12 +1000,11 @@ function buildWall(sector, tileX, tileY, layer, wallPos, elevation, wallSettings
                 var doorBlock = wallSettings.doorBlock.replace("]", ",half=upper]");
                 blocks.setBlock(wallPos, context.getBlock(doorBlock));
             } else {
-                var doorBlock = getNeighbouringWallBlock(sector, layer, tileX, tileY);
-                if (doorBlock) {
-                    blocks.setBlock(wallPos, doorBlock);
+                var wallBlock = getNeighbouringWallBlock(sector, layer, tileX, tileY);
+                if (wallBlock) {
+                    blocks.setBlock(wallPos, wallBlock);
                 } else {
-                    // No neighbouring wall found
-                    blocks.setBlock(wallPos, wallSettings.block);
+                    blocks.setBlock(wallPos, wallBlock);
                 }
             }
         } else if (wallSettings.windowBlock && i > 1 && i < wallSettings.height - 1) {
@@ -954,7 +1026,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -967,7 +1039,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -980,7 +1052,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -993,7 +1065,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -1006,7 +1078,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -1019,7 +1091,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -1032,7 +1104,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -1045,7 +1117,7 @@ function getNeighbouringWallBlock(sector, layer, tileX, tileY) {
         if (isWall(wallType)) {
             wallType = normalizeWallType(wallType);
             var wallSettings = getWallSettings(tile, wallType, null);
-            if (wallSettings.block) {
+            if (wallSettings.block && !wallSettings.doorBlock) {
                 return wallSettings.block;
             }
         }
@@ -1102,6 +1174,9 @@ function placeObject(objectId, groundPos) {
         // Church altar (with white tablecloth)
         // TODO: Put candles on top
         blocks.setBlock(blockPos, context.getBlock("white_wool"));
+    } else if (objectId === 21) {
+        // Fencepost
+        blocks.setBlock(blockPos, context.getBlock("smooth_stone"));
     } else if (objectId === 24) {
         // Church pew
         // TODO: Use stairs with the appropriate orientation
@@ -1117,9 +1192,8 @@ function placeObject(objectId, groundPos) {
         // Counter
         blocks.setBlock(blockPos, context.getBlock("oak_planks"));
     } else if (objectId === 35) {
-        // Tree
-        // TODO: Make a real tree
-        blocks.setBlock(blockPos, context.getBlock("dead_bush"));
+        // Fern
+        blocks.setBlock(blockPos, context.getBlock("fern"));
     } else if (objectId === 38) {
         // Flower
         blocks.setBlock(blockPos, context.getBlock("poppy"));
@@ -1129,6 +1203,9 @@ function placeObject(objectId, groundPos) {
     } else if (objectId === 46) {
         // Railing
         blocks.setBlock(blockPos, context.getBlock("jungle_fence"));
+    } else if (objectId === 55) {
+        // Lumbridge cow field (feeding trough?)
+        blocks.setBlock(blockPos, context.getBlock("composter"));
     } else if (objectId === 61) {
         // Wooden fence gate
         // TODO: This is not positioned correctly
@@ -1147,14 +1224,26 @@ function placeObject(objectId, groundPos) {
         // Furnace
         blocks.setBlock(blockPos, context.getBlock("furnace"));
     } else {
-        player.print("Found object: " + objectId);
+        player.print("Unknown object type: " + objectId);
         blocks.setBlock(blockPos, context.getBlock("lime_wool"));
     }
 }
 
 function placeTree(blockPos) {
     // Based on: https://github.com/EngineHub/WorldEdit/blob/master/worldedit-core/src/main/java/com/sk89q/worldedit/command/tool/TreePlanter.java
+
+    // First try an Oak tree
     var treeTypeEnum = TreeGenerator.TreeType.lookup("oak");
+    for (var attempt = 0; attempt < 10; attempt++) {
+        if (treeTypeEnum.generate(blocks, blockPos)) {
+            // Success
+            return;
+        }
+    }
+
+    // If that fails, try Spruce
+    // (Oak tends to fail near fences due to its short trunk)
+    treeTypeEnum = TreeGenerator.TreeType.lookup("spruce");
     for (var attempt = 0; attempt < 10; attempt++) {
         if (treeTypeEnum.generate(blocks, blockPos)) {
             // Success
