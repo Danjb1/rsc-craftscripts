@@ -8,6 +8,7 @@
  * Useful locations:
  * - Origin (top-left):     /tp 240 80 432
  * - Lumbridge:             /tp 900 80 656
+ * - Aerial view:           /tp @s 768 327 559 180 90
  *
  * ---
  *
@@ -1004,7 +1005,7 @@ function buildWall(sector, tileX, tileY, layer, wallPos, elevation, wallSettings
                 if (wallBlock) {
                     blocks.setBlock(wallPos, wallBlock);
                 } else {
-                    blocks.setBlock(wallPos, wallBlock);
+                    blocks.setBlock(wallPos, wallSettings.block);
                 }
             }
         } else if (wallSettings.windowBlock && i > 1 && i < wallSettings.height - 1) {
@@ -1172,8 +1173,8 @@ function placeObject(objectId, groundPos) {
         blocks.setBlock(blockPos, context.getBlock("white_wool"));
     } else if (objectId === 20) {
         // Church altar (with white tablecloth)
-        // TODO: Put candles on top
         blocks.setBlock(blockPos, context.getBlock("white_wool"));
+        blocks.setBlock(blockPos.add(0, 1, 0), context.getBlock("white_candle[lit=true,candles=3]"));
     } else if (objectId === 21) {
         // Fencepost
         blocks.setBlock(blockPos, context.getBlock("smooth_stone"));
